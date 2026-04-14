@@ -25,21 +25,19 @@ float2 RangeScale;
 // Parameter used to set the minimum and maximum values for the Rotation of the Mask Texture.
 // NOTE: This shader assumes that the range is in degrees and not radians, which I think is
 // more intuitive when setting the parameters.
-float2 RangeAngle;
+float2 RangeAngle; // in degrees
 
 // Parameter used to advance the scene transition effect using the rangeScale and rangeAngle values.
 float Progress;
 
-Texture2D SpriteTexture: register(t0);
+Texture2D SpriteTexture : register(t0);
 Texture2D MaskTexture : register(t1);
 ```
 There is an additional parameter, Progress, which is used to linearly interpolate the scale and rotation between the values set in the Range for each one. This is what is used to advance the scene transition, whether it is opening or closing. For example, when a scene opens, it seems more natural to begin with a small mask that gets bigger and bigger and shows more of the screen until all of it is visible. On the contrary, when a scene closes, the mask would get smaller and smaller until very little of the screen is visible. The Progress parameter controls this transition.
 
-These parameters are set in your C# code for your project. This will be shown later on. Next, the sampler_state definitions are done:
+These parameters are set in your C# code for your project. This will be shown later on. Next, the sampler_state definitions are:
 
 ```
-// IMPORTANT: The SpriteTextureSampler MUST come first before the MaskTextureSampler.
-// ... more comments ...
 sampler2D SpriteTextureSampler : register(s0) = sampler_state
 {
     Filter = Point;
@@ -55,11 +53,11 @@ sampler2D MaskTextureSampler : register(s1) = sampler_state
 };  
 ```
 
-There are two definitions, one for the main texture, which is the image that is rendered during Draw(), and another one for the mask texture, which is set by parameter. This is important: the SpriteTextureSampler MUST come before the MaskTextureSampler. Otherwise, the MaskTextureSampler will get overridden, since it seems like the main texture is always set to the first sampler. You can try switching the order and seeing what happens, which is that the screen will turn black and nothing will work. Other than that, the state assignments (Filter, AddressU, AddressV) are set to:
+There are two definitions, one for the main texture, which is the image that is rendered during Draw(), and another one for the mask texture, which is set by parameter. The state assignments (Filter, AddressU, AddressV) are set to:
 1. Filter = Point. Since the mask texture is pixel art, setting Filter to Point correctly upscales the mask texture without smoothing. Modify this value to something else if you're using a different mask texture.
 2. AddressU and AddressV = Clamp. This clamps values below 0 to 0 and above 1 to 1. In this case, this is used so that anything outside of the mask texture is drawn black. You can change this to other values, too. For example, setting it to Wrap will tile the mask texture across the screen.
 
-After that, I've added a function that rotates a 2d vector by a given angle:
+Note that the main texture will not be used, but I've left it here to avoid issues where the MaskTextureSampler can get overridden by it. After that, I've added a function that rotates a 2d vector by a given angle:
 ```
 // Rotates a vector by a given angle.
 float2 rotate2D(float2 v, float angle)
@@ -82,7 +80,7 @@ Finally, the meat of the effect is as follows inside MainPS:
 // using the Progress parameter.
 float scale = lerp(RangeScale.x, RangeScale.y,  1 - Progress);
 float angle_degrees = lerp(RangeAngle.x, RangeAngle.y,  1 - Progress);
-float angle = radians(angle_degrees);
+float angle = radians(angle_degrees);    
 ```
 This first part uses linear interpolation (lerp) to obtain a scale and angle value according to the Progress parameter. I thought it was more natural to modify an angle in degrees, so the angle is converted to radians at this step.
 
@@ -94,23 +92,11 @@ float2 aspect_ratio = float2(16.0f/9.0f, 1);
 // Change this value if you want the image to scale using another reference point.
 float2 center = float2(.5f, .5f);   
 
-// Coordinates from the main texture. Used later so that the main texture sampler does not get optimized out.
-// IMPORTANT: Do NOT modify this part. Accidentally changing the value of uv where the y component (uv.y) can
-// be negative causes issues.
+// Coordinates from the main texture.
 float2 uv = input.TextureCoordinates;
 ```
-Next, a correction has to be done to the mask texture according to the aspect ratio of the screen, in this case being 16:9 while the mask texture is square 1:1. Modify this variable if you have a different aspect ratio. Without this correction, the mask texture will get scaled along the x axis and will look stretched horizontally. Note that the actual scaling is done later on in the code. In addition, there is also a center variable, which is the reference point for rotation and scaling. In this case, I wanted the mask texture to be scaled and rotated around its center, so it is set to (0.5, 0.5). Feel free to modify this value if you want the scaling and rotation to use another reference point. Finally, the coordinates from the main texture are obtained.
 
-```
-// Removing this if (which never happens) I think causes the SpriteTexture to be compiled out, which
-// means that the MaskTexture gets used for the rendered image? Weird.
-if (uv.y < 0)
-{
-    return tex2D(SpriteTextureSampler, uv);
-    // return float4(1, 0, 0, 1);
-}
-```
-Now, this step I found to be really strange. So, the compiler of the shader code is very aggressive, and if anything is not being used for the final output it can easily get optimized out and be completely removed. In this case, since the main texture (SpriteTexture) is not being used at all, it can get optimized out. This causes a bunch of issues, since now there is only one sampler and one texture parameter, so it can get overridden by the texture coming from Draw(). So, this if is added to ensure that none of that gets optimized out. Note that it will never actually go inside the if, since uv coordinates are between 0 and 1, but adding it ensures the compiler does not optimize those parts of the code out. Check out [this](https://www.reddit.com/r/monogame/comments/1ayv56z/how_do_i_pass_a_texture2d_into_a_hlsl_shader/) reddit post for more info. You can test removing this if and seeing what happens.
+Next, a correction has to be done to the mask texture according to the aspect ratio of the screen, in this case being 16:9 while the mask texture is square 1:1. Modify this variable if you have a different aspect ratio. Without this correction, the mask texture will get scaled along the x axis and will look stretched horizontally. Note that the actual scaling is done later on in the code. In addition, there is also a center variable, which is the reference point for rotation and scaling. In this case, I wanted the mask texture to be scaled and rotated around its center, so it is set to (0.5, 0.5). Feel free to modify this value if you want the scaling and rotation to use another reference point. Finally, the coordinates from the main texture are obtained.
 
 ```
 // First, scale the mask texture using the aspect ratio to correct the image.
@@ -126,7 +112,7 @@ float2 uv_rotated = rotate2D(uv_scaled - center, angle) + center;
 // Sample the scaled mask texture.
 float4 color = tex2D(MaskTextureSampler, uv_rotated);
 ```
-Next, the scaling and rotation and sampling of the mask texture is done. First, the mask texture gets corrected using the aspect ratio so that it goes back to its original square format. Then, the scaling and rotation are applied using the center reference point. Finally, the scaled and rotated mask texture is sampled
+Next, the scaling and rotation and sampling of the mask texture is done. First, the mask texture gets corrected using the aspect ratio so that it goes back to its original square format. Then, the scaling and rotation are applied using the center reference point. Finally, the scaled and rotated mask texture is sampled.
 
 ```
 // The mask texture uses white pixels to know which pixels should be made transparent.
@@ -147,8 +133,8 @@ if (color.r == 1)
     color = float4(0, 0, 1, 0);
 }
 ```
-your screen will get a blue tint where it should be transparent. Thus, it is necessary that each color channel is set to 0, too.
-
+your screen will get a blue tint where it should be transparent, even though the alpha channel is 0. Thus, it is necessary that each color channel is set to 0, too.
+<center><img src="blue_tint_example.png" width="640"/></center>
 
 In this case, this is the mask:
 ![Keyhole Mask used](keyhole_mask.png)
