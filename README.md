@@ -7,6 +7,10 @@ This is the result:
 
 https://github.com/user-attachments/assets/8fd708e9-dcc9-4bf1-ab44-a2fc6f95653f
 
+In this case, this is the mask used:
+
+![Keyhole Mask used](keyhole_mask_upscaled.png)
+
 ## Effect Explanation
 Note that the rest of the tutorial assumes that you are also following the Advanced 2D Shaders tutorial for MonoGame. However, you should be able to apply the shader in your own project even if it differs.
 
@@ -136,10 +140,18 @@ if (color.r == 1)
 your screen will get a blue tint where it should be transparent, even though the alpha channel is 0. Thus, it is necessary that each color channel is set to 0, too.
 <center><img src="blue_tint_example.png" width="640"/></center>
 
-In this case, this is the mask:
-![Keyhole Mask used](keyhole_mask.png)
-
 ## Integrating in your project
+
+If you've been following the Advanced 2D Shaders Tutorial for MonoGame, integrating this shader should be similar to the scene transitions shown there. If not, you should still be able to integrate it by setting the Progress parameter during runtime and setting the MaskTexture, RangeScale and RangeAngle parameters when loading content.
+
+First, add a variable in your Core class to keep a static reference to the keyhole effect material:
+
+```
+public static Material KeyholeTransitionMaterial { get; private set; }
+```
+
+Then, load the keyhole effect as a Material in LoadContent() and set the three parameters:
+
 ```
 KeyholeTransitionMaterial = Content.WatchMaterial("effects/keyholeEffect");
 KeyholeTransitionMaterial.IsDebugVisible = true;
@@ -149,4 +161,38 @@ KeyholeTransitionMaterial.SetParameter("RangeScale", new Vector2(0, 30));
 KeyholeTransitionMaterial.SetParameter("RangeAngle", new Vector2(0, 30));
 ```
 
+Next, set the Progress parameter and Update the material inside Update():
+
+```
+KeyholeTransitionMaterial.SetParameter("Progress", SceneTransition.DirectionalRatio);
+KeyholeTransitionMaterial.Update();
+```
+
+Finally, after your scene is drawn, add the draw call for the effect:
+
+```
+// activeScene draw call over here...
+
+SpriteBatch.Begin(effect: KeyholeTransitionMaterial.Effect);
+
+SpriteBatch.Draw(
+    Pixel,
+    GraphicsDevice.Viewport.Bounds,
+    Color.White);
+    
+SpriteBatch.End();
+
+// debug UI and other draw calls here...
+```
+
+Pixel here is a 1x1 black pixel used to draw the entire screen black. Add the following to the Initialize() method:
+```
+// Create a 1x1 white pixel texture for drawing quads
+Pixel = new Texture2D(GraphicsDevice, 1, 1);
+Pixel.SetData(new Color[] { Color.Black });
+```
+
+That should be it! You can play around with the range of the Scale and Angle parameters until you find something that you like. You can also try other mask textures and see what results you get. Good luck with your projects!
+
+If you've read until here, consider checking out my [youtube channel](https://www.youtube.com/@Hero_GameDev) if you're interested in what I've been working on!
 
