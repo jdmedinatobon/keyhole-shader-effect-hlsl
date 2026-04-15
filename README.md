@@ -120,22 +120,20 @@ Next, the scaling and rotation and sampling of the mask texture is done. First, 
 
 ```
 // The mask texture uses white pixels to know which pixels should be made transparent.
-if (color.r == 1)
-{
-    color = float4(0, 0, 0, 0);
-}
-
-return color;
+return color * (1 - color.r);
 ```
 In the end, you obtain either a black or a white color that is used at this step to know where to make the screen transparent. White colors return a transparent color. Note that the only check being done is if the red channel is 1 (colors are between 0 and 1 here), since this code assumes the mask texture is either black or white.
 
 Another thing to note, the color returned for transparency has each color channel set to 0 and the transparency set to 0. I'm not entirely sure what is happening, but it seems like the default alpha-blending does not simply make a pixel transparent when the alpha channel is set to 0. For example, if you set the blue channel to 1 like this
 
 ```
+// return color * (1 - color.r);
 if (color.r == 1)
 {
     color = float4(0, 0, 1, 0);
 }
+
+return color;
 ```
 your screen will get a blue tint where it should be transparent, even though the alpha channel is 0. Thus, it is necessary that each color channel is set to 0, too.
 <center><img src="blue_tint_example.png" width="640"/></center>
