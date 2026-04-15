@@ -88,12 +88,7 @@ float4 MainPS(VertexShaderOutput input) : COLOR
     float4 color = tex2D(MaskTextureSampler, uv_rotated);
 
     // The mask texture uses white pixels to know which pixels should be made transparent.
-    if (color.r == 1)
-    {
-        color = float4(0, 0, 0, 0);
-    }
-
-    return color;
+    return color * (1 - color.r);
 }
 
 technique SpriteDrawing
